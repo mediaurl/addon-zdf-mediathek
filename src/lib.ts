@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import { matchAll } from "./modwrapper";
 import { ENDPOINT, TOKEN_CACHE_DURATION, FAKE_PLAYER_ID } from "./config";
-import { Source } from '@watchedcom/sdk/dist';
+import { Source, ItemResponse, SeriesItem, SeriesEpisodeItem, MovieItem } from '@watchedcom/sdk/dist';
 
 interface zdfItem {
     id: String,
@@ -10,8 +10,19 @@ interface zdfItem {
     description: String,
     thumbnail: String,
     url: String,
-    sources: any
-};
+    sources: Source[] | null
+}
+
+interface zdfMovieItem extends zdfItem {
+    type: "movie"
+}
+
+interface zdfSeriesItem extends zdfItem {
+    type: "series",
+    season: number,
+    episode: number,
+    name: string
+}
 
 
 // Get Token
@@ -71,7 +82,6 @@ export const getVideoItemById = async (id, token): Promise<zdfItem|null> => {
     return await _getUrl(`${ENDPOINT.API}/content/documents/${id}.json?profile=player`, token)
     .then(resp => resp.json())
     .then(async (js) => {
-        //console.log(js);
         const item = _grepItem(js);
         if (item) {
             item.id = id;
@@ -81,6 +91,50 @@ export const getVideoItemById = async (id, token): Promise<zdfItem|null> => {
         return item;
     });
 }
+
+export const buildResponseItem = (input, video: zdfItem|zdfSeriesItem): ItemResponse => {
+    let item = {};
+
+    switch(video.type) {
+        case 'series':
+            item = <SeriesItem>{
+                ids: input.ids,
+                name: video.name,
+                description: video.description,
+                images: {
+                    poster: video.thumbnail
+                },
+                type: video.type,
+                episodes: [
+                    <SeriesEpisodeItem>{
+                        ids: input.ids,
+                        name: video.title,
+                        description: video.description,
+                        episode: video.episode,
+                        season: video.season,
+                        sources: video.sources
+                    }
+                ]
+            };
+
+            break;
+
+        case 'movie':
+            item = <MovieItem>{
+                ids: input.ids,
+                name: video.title,
+                description: video.description,
+                images: {
+                    poster: video.thumbnail
+                },
+                type: video.type,
+                sources: video.sources
+            };
+            break;
+    }
+
+    return item;
+};
 
 const _parsePage = async (url:String, token): Promise<zdfItem[]> => {
     const result:zdfItem[] = await _getUrl(url, token)
@@ -119,7 +173,7 @@ const _parseSearchPage = (json): zdfItem[] => {
 
 const _parseSearchResult = (json): zdfItem[] => {
     const results = json.module.map((module)=>{
-        return module['filterRef']['resultsWithVideo']['http://zdf.de/rels/search/results']
+        return module.filterRef.resultsWithVideo['http://zdf.de/rels/search/results']
         .map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
     });
     return results;
@@ -130,7 +184,7 @@ const _parsePageIndex = (json): zdfItem[] => {
     return results.map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
 };
 
-const _grepItem = (target, id=null): zdfItem|null => {
+const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
     //console.log("target", target);
     if (target['profile'] == 'http://zdf.de/rels/not-found') {
         return null;
@@ -142,26 +196,28 @@ const _grepItem = (target, id=null): zdfItem|null => {
     if (!target['hasVideo']) {
         return null;
     }
+    //console.log(target.programmeItem[0]['http://zdf.de/rels/target']);
+
+    const content = target.mainVideoContent['http://zdf.de/rels/target'];
+    const brand   = target['http://zdf.de/rels/brand'];
+    const contentTypeMapping = {
+        //news: 'series',
+        episode: 'series',
+        clip: 'movie'
+    };
 
     const item = {
-        id: id?? target.id?? "",
+        id: target.id?? "",
         type: "",
-        title: target.title?? target.teaserHeadline?? "",
+        title: content.title?? target.title?? target.teaserHeadline?? "",
         description: target.teasertext?? "",
         thumbnail: target.teaserImageRef?.layouts['768xauto'] || target.teaserImageRef?.layouts['1920x1080'],
         url: "",
         sources: []
     };
 
-    const content = target.mainVideoContent['http://zdf.de/rels/target'];
-    const contentTypeMapping = {
-        news: 'series',
-        episode: 'series',
-        clip: 'movie'
-    };
-
     switch (target.contentType) {
-        case 'news':
+        //case 'news':
         case 'episode':
         case 'clip':
             if (undefined === content['http://zdf.de/rels/streams/ptmd-template']) {
@@ -170,6 +226,13 @@ const _grepItem = (target, id=null): zdfItem|null => {
             }
             item.type = contentTypeMapping[target.contentType];
             item.url  = ENDPOINT.API + content['http://zdf.de/rels/streams/ptmd-template'].replace('{playerId}',FAKE_PLAYER_ID);
+
+            if (item.type === "series") {
+                item['name']    = brand.title;
+                item['episode'] = 1;
+                item['season']  = 1;
+            }
+            
             break;
 
         default:
@@ -220,8 +283,7 @@ const _getVideoSources = async (url, token) => {
                             languages: [quality.audio.tracks[0].language.substr(0,2)],
                             type: "url",
                             name: quality.quality,
-                            url: `${quality.audio.tracks[0].uri}`,
-                            
+                            url: `${quality.audio.tracks[0].uri}`
                         });
                     }
                 })

@@ -1,7 +1,5 @@
 import { WorkerHandlers, Source, ResolveRequest, ItemResponse } from "@watchedcom/sdk";
-import { getToken, getMostViewed, getVideoItemById } from "./lib";
-
-
+import { getToken, getMostViewed, getVideoItemById, buildResponseItem } from "./lib";
 
 export const directoryHandler: WorkerHandlers["directory"] = async (input, ctx) => {
     console.log("directory", input);
@@ -40,19 +38,11 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
         throw new Error("invalid item");
     }
 
-    const item: ItemResponse = {
-        ids: input.ids,
-        type: video.type,
-        name: video.title || input.name,
-        description: video.description,
-        language: "de",
-        sources: video.sources,
-        images: {
-            poster: video.thumbnail
-        },
-    };
+    // build item response
+    const item = buildResponseItem(input, video);
 
     console.log(item);
 
     return item;
 };
+
