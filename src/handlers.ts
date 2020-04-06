@@ -36,6 +36,9 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
     const token = await getToken(ctx.cache);
 
     const video = await getVideoItemById(input.ids.id, token);
+    if (!video) {
+        throw new Error("invalid item");
+    }
 
     const item: ItemResponse = {
         ids: input.ids,

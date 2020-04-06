@@ -5,8 +5,8 @@ import { Source } from '@watchedcom/sdk/dist';
 
 interface zdfItem {
     id: String,
-    type: String,
-    title: String,
+    type: "iptv" | "movie" | "series",
+    title: string,
     description: String,
     thumbnail: String,
     url: String,
@@ -56,37 +56,50 @@ export const getClientToken = async (ctx) => {
 
 // meist gesehen
 // content/documents/meist-gesehen-100.json?profile=default
-export const getMostViewed: Promise<zdfItem[]> = async (token:String) => {
+export const getMostViewed = async (token:String): Promise<zdfItem[]> => {
     return await _parsePage(`${ENDPOINT.API}/content/documents/meist-gesehen-100.json?profile=default`, token);
 };
 
 // Alle Sendungen von A-Z
 // content/documents/sendungen-100.json?profile=default
-export const getAZ: Promise<zdfItem[]>  = async (token) => {
+export const getAZ  = async (token): Promise<zdfItem[]> => {
     return await _parsePage(`${ENDPOINT.API}/content/documents/sendungen-100.json?profile=default`, token);
 };
 
 // Get a single video by id
-export const getVideoItemById: Promise<zdfItem> = async (id, token) => {
+export const getVideoItemById = async (id, token): Promise<zdfItem|null> => {
     return await _getUrl(`${ENDPOINT.API}/content/documents/${id}.json?profile=player`, token)
     .then(resp => resp.json())
     .then(async (js) => {
         //console.log(js);
         const item = _grepItem(js);
-        item.id = id;
-        const url = js.mainVideoContent['http://zdf.de/rels/target']['http://zdf.de/rels/streams/ptmd-template'].replace('{playerId}',FAKE_PLAYER_ID);
-        item.sources = await _getVideoSources(`${ENDPOINT.API}/${url}`, token);
+        if (item) {
+            item.id = id;
+            const url = js.mainVideoContent['http://zdf.de/rels/target']['http://zdf.de/rels/streams/ptmd-template'].replace('{playerId}',FAKE_PLAYER_ID);
+            item.sources = await _getVideoSources(`${ENDPOINT.API}/${url}`, token);
+        }
         return item;
     });
 }
 
-const _parsePage: Promise<zdfItem[]> = async (url:String, token) => {
+const _parsePage = async (url:String, token): Promise<zdfItem[]> => {
     const result:zdfItem[] = await _getUrl(url, token)
     .then(resp => resp.json())
     .then((js) => {
-        let items = [];
-        if (js.profile == 'http://zdf.de/rels/content/page-index') {
-            items = _parsePageIndex(js);
+        let items:zdfItem[] = [];
+
+        switch (js.profile) {
+            case 'http://zdf.de/rels/content/page-index':
+                items = _parsePageIndex(js);
+                break;
+
+            case 'http://zdf.de/rels/search/result':
+                items = _parseSearchResult(js);
+                break;
+
+            case 'http://zdf.de/rels/search/result-page':
+                items = _parseSearchPage(js);
+                break;
         }
     
         return items?? [];
@@ -99,12 +112,25 @@ const _getUrl = async (url:String, token) => {
     return await fetch(url,{headers:{'Api-Auth':`Bearer ${token}`}});
 };
 
-const _parsePageIndex: zdfItem[] = (page) => {
-    const results = page.module[0].filterRef.resultsWithVideo['http://zdf.de/rels/search/results']?? [];
+const _parseSearchPage = (json): zdfItem[] => {
+    const results = json['http://zdf.de/rels/search/results'].map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
+    return results;
+};
+
+const _parseSearchResult = (json): zdfItem[] => {
+    const results = json.module.map((module)=>{
+        return module['filterRef']['resultsWithVideo']['http://zdf.de/rels/search/results']
+        .map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
+    });
+    return results;
+};
+
+const _parsePageIndex = (json): zdfItem[] => {
+    const results = json.module[0].filterRef.resultsWithVideo['http://zdf.de/rels/search/results']?? [];
     return results.map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
 };
 
-const _grepItem: zdfItem|null = (target, id=null) => {
+const _grepItem = (target, id=null): zdfItem|null => {
     //console.log("target", target);
     if (target['profile'] == 'http://zdf.de/rels/not-found') {
         return null;
@@ -123,7 +149,8 @@ const _grepItem: zdfItem|null = (target, id=null) => {
         title: target.title?? target.teaserHeadline?? "",
         description: target.teasertext?? "",
         thumbnail: target.teaserImageRef?.layouts['768xauto'] || target.teaserImageRef?.layouts['1920x1080'],
-        url: ""
+        url: "",
+        sources: []
     };
 
     const content = target.mainVideoContent['http://zdf.de/rels/target'];
