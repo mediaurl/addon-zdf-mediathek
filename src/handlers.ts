@@ -1,5 +1,5 @@
 import { WorkerHandlers } from "@watchedcom/sdk";
-import { zdfItem, getToken, getMostViewed, getVideoItemById, buildResponseItem, searchVideos } from "./lib";
+import { zdfItem, getToken, getMostViewed, getVideoItemById, buildResponseItem, searchVideos, getAZ } from "./lib";
 import { i18n } from "./i18n";
 
 export const directoryHandler: WorkerHandlers["directory"] = async (input, ctx) => {
@@ -17,9 +17,11 @@ export const directoryHandler: WorkerHandlers["directory"] = async (input, ctx) 
     if (input['search'].length) {
         results = await searchVideos(input.search, token);
     }
-
-    else {
+    else if(input.rootId === 'mostviewed') {
         results = await getMostViewed(token);
+    }
+    else if(input.rootId === 'az') {
+        results = await getAZ(token);
     }
 
     return {

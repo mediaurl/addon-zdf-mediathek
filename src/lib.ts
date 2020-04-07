@@ -143,20 +143,28 @@ export const buildResponseItem = (input, video: zdfItem|zdfSeriesItem): ItemResp
 const _parsePage = async (url:String, token): Promise<zdfItem[]> => {
     return await _getUrl(url, token)
     .then(resp => resp.json())
-    .then((js) => {
+    .then((json) => {
         let items:zdfItem[] = [];
 
-        switch (js.profile) {
+        switch (json.profile) {
             case 'http://zdf.de/rels/content/page-index':
-                items = _parsePageIndex(js);
+                items = _parsePageIndex(json);
                 break;
 
             case 'http://zdf.de/rels/search/result':
-                items = _parseSearchResult(js);
+                items = _parseSearchResult(json);
                 break;
 
             case 'http://zdf.de/rels/search/result-page':
-                items = _parseSearchPage(js);
+                items = _parseSearchPage(json);
+                break;
+            
+            case 'http://zdf.de/rels/content/special-page-brand-a-z':
+                items = _parseBrandsPage(json);
+                break;
+
+            default:
+                console.log(`Unknown profile ${json.profile}`);
                 break;
         }
     
@@ -177,33 +185,51 @@ const _parseSearchPage = (json): zdfItem[] => {
 const _parseSearchResult = (json): zdfItem[] => {
     return json.module
     .map(module => module.filterRef.resultsWithVideo['http://zdf.de/rels/search/results'])
-    .map(result => _grepItem(result['http://zdf.de/rels/target']))
+    .map(result => undefined === result['http://zdf.de/rels/target']? false: _grepItem(result['http://zdf.de/rels/target']))
     .filter(item => !!item);
 };
 
 const _parsePageIndex = (json): zdfItem[] => {
     return (json.module[0].filterRef.resultsWithVideo['http://zdf.de/rels/search/results']?? [])
-    .map(result => _grepItem(result['http://zdf.de/rels/target']))
+    .map(result => undefined === result['http://zdf.de/rels/target']? false: _grepItem(result['http://zdf.de/rels/target']))
     .filter(item => !!item);
+};
+
+const _parseBrandsPage = (json): zdfItem[] => {
+    return json.brand
+    .map(brand => brand.teaser)
+    .map(teaser => !teaser || undefined === teaser['http://zdf.de/rels/target']? false: _grepItem(teaser['http://zdf.de/rels/target']))
+    .filter(item => !!item);
+};
+
+const _grepImage = (target) => {
+    if ('layouts' in target.teaserImageRef) {
+        return target.teaserImageRef.layouts['768xauto'] || target.teaserImageRef.layouts['1920x1080'];
+    }
+    return '';
 };
 
 const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
     //console.log("target", target);
     if (target['profile'] == 'http://zdf.de/rels/not-found') {
+        console.log('not-found', target);
         return null;
     }
     if (target['profile'] == 'http://zdf.de/rels/gone') {
+        console.log('gone', target);
         return null;
     }
     
     if (!target['hasVideo']) {
+        console.log('!hasVideo', target);
         return null;
     }
 
     const contentTypeMapping = {
         //news: 'series',
         episode: 'series',
-        clip: 'movie'
+        clip: 'movie',
+        brand: 'series'
     };
 
     const brand = target['http://zdf.de/rels/brand'];
@@ -213,7 +239,7 @@ const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
         type: "",
         title: target.title?? target.teaserHeadline?? "",
         description: target.teasertext?? "",
-        thumbnail: target.teaserImageRef?.layouts['768xauto'] || target.teaserImageRef?.layouts['1920x1080'],
+        thumbnail: _grepImage(target),
         url: "",
         sources: []
     };
@@ -237,6 +263,12 @@ const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
                 item['season']  = 1;
             }
             
+            break;
+
+        case 'brand':
+            item.type = contentTypeMapping[target.contentType];
+            item.url  = ENDPOINT.API + target['http://zdf.de/rels/search/page-video-counter-with-video']['self'].replace(/&limit=0/,'&limit=100');
+
             break;
 
         default:
