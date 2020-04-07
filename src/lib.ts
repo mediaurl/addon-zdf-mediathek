@@ -1,9 +1,9 @@
-import fetch from 'node-fetch';
-import { matchAll } from "./modwrapper";
-import { ENDPOINT, TOKEN_CACHE_DURATION, FAKE_PLAYER_ID } from "./config";
 import { Source, ItemResponse, SeriesItem, SeriesEpisodeItem, MovieItem } from '@watchedcom/sdk/dist';
+import fetch from 'node-fetch';
+import { ENDPOINT, TOKEN_CACHE_DURATION, FAKE_PLAYER_ID } from "./config";
+import { matchAll } from "./modwrapper";
 
-interface zdfItem {
+export interface zdfItem {
     id: String,
     type: "iptv" | "movie" | "series",
     title: string,
@@ -65,7 +65,11 @@ export const getClientToken = async (ctx) => {
     return token;
 };
 
-// meist gesehen
+// search
+export const searchVideos = async (query:String, token:String): Promise<zdfItem[]> => {
+    return await _parsePage(`${ENDPOINT.API}/search/documents?q=${query}`, token);
+}
+
 // content/documents/meist-gesehen-100.json?profile=default
 export const getMostViewed = async (token:String): Promise<zdfItem[]> => {
     return await _parsePage(`${ENDPOINT.API}/content/documents/meist-gesehen-100.json?profile=default`, token);
@@ -78,7 +82,7 @@ export const getAZ  = async (token): Promise<zdfItem[]> => {
 };
 
 // Get a single video by id
-export const getVideoItemById = async (id, token): Promise<zdfItem|null> => {
+export const getVideoItemById = async (id, token:String): Promise<zdfItem|null> => {
     return await _getUrl(`${ENDPOINT.API}/content/documents/${id}.json?profile=player`, token)
     .then(resp => resp.json())
     .then(async (js) => {
@@ -93,13 +97,13 @@ export const getVideoItemById = async (id, token): Promise<zdfItem|null> => {
 }
 
 export const buildResponseItem = (input, video: zdfItem|zdfSeriesItem): ItemResponse => {
-    let item = {};
+    let item;
 
     switch(video.type) {
         case 'series':
             item = <SeriesItem>{
                 ids: input.ids,
-                name: video.name,
+                name: video['name']?? video.title,
                 description: video.description,
                 images: {
                     poster: video.thumbnail
@@ -110,8 +114,8 @@ export const buildResponseItem = (input, video: zdfItem|zdfSeriesItem): ItemResp
                         ids: input.ids,
                         name: video.title,
                         description: video.description,
-                        episode: video.episode,
-                        season: video.season,
+                        episode: video['episode']?? 1,
+                        season: video['season']?? 1,
                         sources: video.sources
                     }
                 ]
@@ -137,7 +141,7 @@ export const buildResponseItem = (input, video: zdfItem|zdfSeriesItem): ItemResp
 };
 
 const _parsePage = async (url:String, token): Promise<zdfItem[]> => {
-    const result:zdfItem[] = await _getUrl(url, token)
+    return await _getUrl(url, token)
     .then(resp => resp.json())
     .then((js) => {
         let items:zdfItem[] = [];
@@ -158,8 +162,6 @@ const _parsePage = async (url:String, token): Promise<zdfItem[]> => {
     
         return items?? [];
     });
-
-    return result;
 };
 
 const _getUrl = async (url:String, token) => {
@@ -167,21 +169,22 @@ const _getUrl = async (url:String, token) => {
 };
 
 const _parseSearchPage = (json): zdfItem[] => {
-    const results = json['http://zdf.de/rels/search/results'].map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
-    return results;
+    return json['http://zdf.de/rels/search/results']
+    .map(result => undefined === result['http://zdf.de/rels/target']? false: _grepItem(result['http://zdf.de/rels/target']))
+    .filter(item => !!item);
 };
 
 const _parseSearchResult = (json): zdfItem[] => {
-    const results = json.module.map((module)=>{
-        return module.filterRef.resultsWithVideo['http://zdf.de/rels/search/results']
-        .map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
-    });
-    return results;
+    return json.module
+    .map(module => module.filterRef.resultsWithVideo['http://zdf.de/rels/search/results'])
+    .map(result => _grepItem(result['http://zdf.de/rels/target']))
+    .filter(item => !!item);
 };
 
 const _parsePageIndex = (json): zdfItem[] => {
-    const results = json.module[0].filterRef.resultsWithVideo['http://zdf.de/rels/search/results']?? [];
-    return results.map(result => _grepItem(result['http://zdf.de/rels/target'])).filter(item => !!item);
+    return (json.module[0].filterRef.resultsWithVideo['http://zdf.de/rels/search/results']?? [])
+    .map(result => _grepItem(result['http://zdf.de/rels/target']))
+    .filter(item => !!item);
 };
 
 const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
@@ -196,20 +199,19 @@ const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
     if (!target['hasVideo']) {
         return null;
     }
-    //console.log(target.programmeItem[0]['http://zdf.de/rels/target']);
 
-    const content = target.mainVideoContent['http://zdf.de/rels/target'];
-    const brand   = target['http://zdf.de/rels/brand'];
     const contentTypeMapping = {
         //news: 'series',
         episode: 'series',
         clip: 'movie'
     };
 
+    const brand = target['http://zdf.de/rels/brand'];
+
     const item = {
         id: target.id?? "",
         type: "",
-        title: content.title?? target.title?? target.teaserHeadline?? "",
+        title: target.title?? target.teaserHeadline?? "",
         description: target.teasertext?? "",
         thumbnail: target.teaserImageRef?.layouts['768xauto'] || target.teaserImageRef?.layouts['1920x1080'],
         url: "",
@@ -220,12 +222,14 @@ const _grepItem = (target): zdfItem|zdfSeriesItem|zdfMovieItem|null => {
         //case 'news':
         case 'episode':
         case 'clip':
+            const content = target.mainVideoContent['http://zdf.de/rels/target'];
             if (undefined === content['http://zdf.de/rels/streams/ptmd-template']) {
                 console.log("No ptmd", content)
                 return null;
             }
-            item.type = contentTypeMapping[target.contentType];
-            item.url  = ENDPOINT.API + content['http://zdf.de/rels/streams/ptmd-template'].replace('{playerId}',FAKE_PLAYER_ID);
+            item.title = content.title;
+            item.type  = contentTypeMapping[target.contentType];
+            item.url   = ENDPOINT.API + content['http://zdf.de/rels/streams/ptmd-template'].replace('{playerId}',FAKE_PLAYER_ID);
 
             if (item.type === "series") {
                 item['name']    = brand.title;
@@ -261,22 +265,8 @@ const _getVideoSources = async (url, token) => {
         */
 
         js.priorityList.map((item)=>{
-
-            if (false && 'h264_aac_ts_http_m3u8_http' === item.formitaeten[0]?.type) {
-                item.formitaeten[0].qualities.map((quality)=>{
-                    if (quality['quality'] == 'auto') {
-                        url.push(`${quality.audio.tracks[0].uri}`);
-                        sources.push({
-                            type: "url",
-                            url: `${quality.audio?.tracks[0].uri}`
-                        });
-                    }
-                })
-            }
-
             if ('h264_aac_mp4_http_na_na' === item.formitaeten[0]?.type) {
                 item.formitaeten[0].qualities.map((quality)=>{
-                    //console.log(quality.audio?.tracks[0]);
                     if (['veryhigh', 'high', 'low'].indexOf(quality.quality)>-1) {
                         sources.push({
                             //icon: "",

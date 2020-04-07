@@ -4,19 +4,21 @@ import { directoryHandler, itemHandler } from "./handlers";
 export const zdfMediathekAddon = createWorkerAddon({
   "id": "addon-zdf-mediathek",
   "name": "ZDF Mediathek",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "itemTypes": [
     "movie",
     "series",
   ],
-  actions: ["directory", "item", "resolve"],
+  actions: ["directory", "item"],
+  defaultDirectoryFeatures: {
+    search: { enabled: true },
+  },
+  defaultDirectoryOptions: {
+      imageShape: "landscape",
+      displayName: true,
+  }
 });
 
 zdfMediathekAddon.registerActionHandler("directory", directoryHandler);
 
 zdfMediathekAddon.registerActionHandler("item", itemHandler);
-
-zdfMediathekAddon.registerActionHandler("resolve", async (input, ctx) => {
-  // resolve action handler code goes here
-  throw new Error("Not implemented");
-});
