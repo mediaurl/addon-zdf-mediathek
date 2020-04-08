@@ -5,7 +5,7 @@ import { i18n } from "./i18n";
 export const zdfMediathekAddon = createWorkerAddon({
   id: "addon-zdf-mediathek",
   name: "ZDF Mediathek",
-  version: "0.0.2",
+  version: "0.0.3",
   itemTypes: [ "movie", "series", "directory" ],
   actions: [ "directory", "item", "resolve" ],
   defaultDirectoryFeatures: {
