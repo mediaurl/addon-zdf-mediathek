@@ -1,26 +1,25 @@
-import { createWorkerAddon } from "@watchedcom/sdk";
+import { createWorkerAddon, runCli } from "@watchedcom/sdk";
 import { directoryHandler, itemHandler } from "./handlers";
-import { i18n } from "./i18n";
 
-export const zdfMediathekAddon = createWorkerAddon({
-  id: "addon-zdf-mediathek",
+const zdfMediathekAddon = createWorkerAddon({
+  id: "zdf-mediathek",
   name: "ZDF Mediathek",
   version: "0.0.3",
-  itemTypes: [ "movie", "series", "directory" ],
-  actions: [ "directory", "item", "resolve" ],
+  itemTypes: ["movie", "series", "directory"],
+  actions: ["directory", "item", "resolve"],
   defaultDirectoryFeatures: {
     search: { enabled: true },
   },
   defaultDirectoryOptions: {
-      imageShape: "landscape",
-      displayName: true,
+    imageShape: "landscape",
+    displayName: true,
   },
   rootDirectories: [
     {
       id: "mostviewed",
       features: {
-        search: { enabled: false }
-      }
+        search: { enabled: false },
+      },
     },
     /*
     {
@@ -61,7 +60,7 @@ export const zdfMediathekAddon = createWorkerAddon({
       rootId: "mostviewed",
       id: "mostviewed",
       name: "ZDF: Meist gesehen",
-      config: { showOnHomescreen: true }
+      config: { showOnHomescreen: true },
     },
     /*
     { 
@@ -71,9 +70,13 @@ export const zdfMediathekAddon = createWorkerAddon({
       config: { showOnHomescreen: false }
     }
     */
-  ]
+  ],
 });
 
 zdfMediathekAddon.registerActionHandler("directory", directoryHandler);
 
 zdfMediathekAddon.registerActionHandler("item", itemHandler);
+
+runCli([zdfMediathekAddon], {
+  singleMode: true,
+});
