@@ -1,3 +1,4 @@
+import * as url from "url";
 import {
   Source,
   ItemResponse,
@@ -5,13 +6,15 @@ import {
   SeriesEpisodeItem,
   MovieItem,
   DirectoryResponse,
-} from "@watchedcom/sdk/dist";
+} from "@watchedcom/sdk";
 import fetch from "node-fetch";
-import { ENDPOINT, TOKEN_CACHE_DURATION, FAKE_PLAYER_ID } from "./config";
-import { matchAll } from "./modwrapper";
+import { getToken } from "./token";
+
+const FAKE_PLAYER_ID = "ngplayer_2_3";
+const API_URL = "https://api.zdf.de";
 
 export interface zdfItem {
-  id: String;
+  id: string;
   type: "iptv" | "movie" | "series";
   title: string;
   description: string;
@@ -32,113 +35,59 @@ interface zdfSeriesItem extends zdfItem {
   name: string;
 }
 
-// Get Token
-export const getToken = async (cache) => {
-  let token = "";
-
-  if (cache) {
-    token = await cache.get("api_token").then(async (t) => {
-      if (t === undefined) {
-        t = await _getTokenFromWeb(fetch);
-        cache.set("api_token", t, TOKEN_CACHE_DURATION);
-      }
-      return t;
-    });
-  } else {
-    token = await _getTokenFromWeb(fetch);
-  }
-
-  return token;
-};
-
-// Get Token
-export const getClientToken = async (ctx) => {
-  let token = "";
-
-  if (ctx.cache) {
-    token = await ctx.cache.get("client_api_token").then(async (t) => {
-      if (t === undefined) {
-        t = await _getTokenFromWeb(ctx.fetch);
-        ctx.cache.set("client_api_token", t, TOKEN_CACHE_DURATION);
-      }
-      return t;
-    });
-  } else {
-    token = await _getTokenFromWeb(ctx.fetch);
-  }
-
-  return token;
+const makeApiQuery = async <T = any>(path: string): Promise<T> => {
+  return fetch(url.resolve("https://api.zdf.de/", path), {
+    headers: { "Api-Auth": `Bearer ${await getToken()}` },
+  }).then((resp) => resp.json());
 };
 
 // search
-export const searchVideos = async (
-  query: String,
-  token: String
-): Promise<zdfItem[]> => {
-  return await _parsePage(`${ENDPOINT.API}/search/documents?q=${query}`, token);
+export const searchVideos = async (query: string): Promise<zdfItem[]> => {
+  return _parsePage(`search/documents?q=${query}`);
 };
 
 // start-page
-export const getStartPage = async (token: String): Promise<zdfItem[]> => {
-  return await _parsePage(
-    `${ENDPOINT.API}/content/documents/zdf-startseite-100.json?profile=default`,
-    token
+export const getStartPage = (): Promise<zdfItem[]> => {
+  return _parsePage(
+    "content/documents/zdf-startseite-100.json?profile=default"
   );
 };
 
 // content/documents/meist-gesehen-100.json?profile=default
-export const getMostViewed = async (token: String): Promise<zdfItem[]> => {
-  return await _parsePage(
-    `${ENDPOINT.API}/content/documents/meist-gesehen-100.json?profile=default`,
-    token
-  );
+export const getMostViewed = async (): Promise<zdfItem[]> => {
+  return _parsePage("content/documents/meist-gesehen-100.json?profile=default");
 };
 
 // Alle Sendungen von A-Z
 // content/documents/sendungen-100.json?profile=default
-export const getAZ = async (token): Promise<zdfItem[]> => {
-  return await _parsePage(
-    `${ENDPOINT.API}/content/documents/sendungen-100.json?profile=default`,
-    token
-  );
+export const getAZ = (): Promise<zdfItem[]> => {
+  return _parsePage("/content/documents/sendungen-100.json?profile=default");
 };
 
-export const getNewest = async (token: String): Promise<zdfItem[]> => {
-  return await _parsePage(
-    `${ENDPOINT.API}/content/documents/meist-gesehen-100.json?profile=default`,
-    token
-  );
+export const getNewest = (): Promise<zdfItem[]> => {
+  return _parsePage(`content/documents/meist-gesehen-100.json?profile=default`);
 };
 
 //
-export const getBrand = async (brand, token: string) => {
-  return await _parsePage(
-    `${ENDPOINT.API}/content/documents/${brand}.json?profile=default`,
-    token
-  );
+export const getBrand = (brand: string) => {
+  return _parsePage(`content/documents/${brand}.json?profile=default`);
 };
 
 // Get a single video by id
-export const getVideoItemById = async (
-  id,
-  token: String
-): Promise<zdfItem | null> => {
-  return await _getUrl(
-    `${ENDPOINT.API}/content/documents/${id}.json?profile=player`,
-    token
-  )
-    .then((resp) => resp.json())
-    .then(async (js) => {
+export const getVideoItemById = async (id): Promise<zdfItem | null> => {
+  return makeApiQuery(`content/documents/${id}.json?profile=player`).then(
+    async (js) => {
       const item = _grepItem(js);
       if (item) {
         item.id = id;
-        const url = js.mainVideoContent["http://zdf.de/rels/target"][
+        const path = js.mainVideoContent["http://zdf.de/rels/target"][
           "http://zdf.de/rels/streams/ptmd-template"
         ].replace("{playerId}", FAKE_PLAYER_ID);
-        item.sources = await _getVideoSources(`${ENDPOINT.API}/${url}`, token);
+        item.sources = await _getVideoSources(path);
       }
       return item;
-    });
+    }
+  );
 };
 
 export const buildResponseItem = (
@@ -190,44 +139,37 @@ export const buildResponseItem = (
   return item;
 };
 
-const _parsePage = async (url: String, token): Promise<zdfItem[]> => {
-  return await _getUrl(url, token)
-    .then((resp) => resp.json())
-    .then((json) => {
-      //console.dir(json,{depth:20});
-      let items: zdfItem[] = [];
-      switch (json.profile) {
-        case "http://zdf.de/rels/content/page-home":
-          items = _parseStartPage(json);
-          break;
+const _parsePage = async (path: string): Promise<zdfItem[]> => {
+  return makeApiQuery(path).then((json) => {
+    let items: zdfItem[] = [];
+    switch (json.profile) {
+      case "http://zdf.de/rels/content/page-home":
+        items = _parseStartPage(json);
+        break;
 
-        case "http://zdf.de/rels/content/page-index":
-          items = _parsePageIndex(json);
-          break;
+      case "http://zdf.de/rels/content/page-index":
+        items = _parsePageIndex(json);
+        break;
 
-        case "http://zdf.de/rels/search/result":
-          items = _parseSearchResult(json);
-          break;
+      case "http://zdf.de/rels/search/result":
+        items = _parseSearchResult(json);
+        break;
 
-        case "http://zdf.de/rels/search/result-page":
-          items = _parseSearchPage(json);
-          break;
+      case "http://zdf.de/rels/search/result-page":
+        items = _parseSearchPage(json);
+        break;
 
-        case "http://zdf.de/rels/content/special-page-brand-a-z":
-          items = _parseBrandsPage(json);
-          break;
+      case "http://zdf.de/rels/content/special-page-brand-a-z":
+        items = _parseBrandsPage(json);
+        break;
 
-        default:
-          console.log(`Unknown profile ${json.profile}`);
-          break;
-      }
+      default:
+        console.log(`Unknown profile ${json.profile}`);
+        break;
+    }
 
-      return items ?? [];
-    });
-};
-
-const _getUrl = async (url: String, token) => {
-  return await fetch(url, { headers: { "Api-Auth": `Bearer ${token}` } });
+    return items ?? [];
+  });
 };
 
 const _parseStartPage = (json): zdfItem[] => {
@@ -368,7 +310,7 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
       item.title = content.title;
       item.type = contentTypeMapping[target.contentType];
       item.url =
-        ENDPOINT.API +
+        API_URL +
         content["http://zdf.de/rels/streams/ptmd-template"].replace(
           "{playerId}",
           FAKE_PLAYER_ID
@@ -390,7 +332,7 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
 
       if ("http://zdf.de/rels/search/page-video-counter-with-video" in target) {
         item.url =
-          ENDPOINT.API +
+          API_URL +
           target["http://zdf.de/rels/search/page-video-counter-with-video"][
             "self"
           ].replace(/&limit=0/, "&limit=100");
@@ -409,69 +351,26 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
   return <any>item;
 };
 
-const _getVideoSources = async (url, token) => {
-  return await _getUrl(url, token)
-    .then((resp) => resp.json())
-    .then((js) => {
-      const sources: Source[] = [];
+const _getVideoSources = async (path) => {
+  return makeApiQuery(path).then((data) => {
+    const sources: Source[] = [];
 
-      /*
-        if (undefined !== js['captions']) {
-            js.captions.map((caption)=>{
-                if('ebu-tt-d-basic-de' === caption.format) {
-                    subtitle = caption.uri;
-                }
+    data.priorityList.map((item) => {
+      if ("h264_aac_mp4_http_na_na" === item.formitaeten[0]?.type) {
+        item.formitaeten[0].qualities.map((quality) => {
+          if (["veryhigh", "high", "low"].indexOf(quality.quality) > -1) {
+            sources.push({
+              //icon: "",
+              languages: [quality.audio.tracks[0].language.substr(0, 2)],
+              type: "url",
+              name: quality.quality,
+              url: `${quality.audio.tracks[0].uri}`,
             });
-        }
-        */
-
-      js.priorityList.map((item) => {
-        if ("h264_aac_mp4_http_na_na" === item.formitaeten[0]?.type) {
-          item.formitaeten[0].qualities.map((quality) => {
-            if (["veryhigh", "high", "low"].indexOf(quality.quality) > -1) {
-              sources.push({
-                //icon: "",
-                languages: [quality.audio.tracks[0].language.substr(0, 2)],
-                type: "url",
-                name: quality.quality,
-                url: `${quality.audio.tracks[0].uri}`,
-              });
-            }
-          });
-        }
-      });
-
-      return sources;
-    });
-};
-
-const _getTokenFromWeb = async (fetchFn: CallableFunction) => {
-  const token = await fetchFn(`${ENDPOINT.WWW}/`)
-    .then((res) => res.text())
-    .then((html) => {
-      let t = undefined;
-      if (!t) {
-        const matches = matchAll(html, /apiToken: '([\w\d]+)'/gi);
-        for (;;) {
-          const match = matches.nextRaw();
-          if (!match) {
-            break;
           }
-          t = match[1];
-        }
+        });
       }
-      if (!t) {
-        const matches = matchAll(html, /"apiToken": "([\w\d]+)"/gi);
-        for (;;) {
-          const match = matches.nextRaw();
-          if (!match) {
-            break;
-          }
-          t = match[1];
-        }
-      }
-      return t;
     });
 
-  return token;
+    return sources;
+  });
 };

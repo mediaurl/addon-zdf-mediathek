@@ -2,7 +2,6 @@ import { WorkerHandlers } from "@watchedcom/sdk";
 import { i18n } from "./i18n";
 import {
   zdfItem,
-  getToken,
   searchVideos,
   getAZ,
   getMostViewed,
@@ -100,59 +99,57 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 
   const cursor: number = <number>input.cursor || 1;
 
-  const token = await getToken(ctx.cache);
-
   let response;
 
   // Perform search
   if (input["search"].length) {
-    response = searchVideos(input.search, token).then((results) =>
+    return searchVideos(input.search).then((results) =>
       buildDefaultDirectoryResponse(input, cursor, results)
     );
-  } else {
-    // RootDirectories
-    switch (input.rootId) {
-      // Overview directory "zdf"
-      case "zdf":
-        response = getStartPage(token).then((results) =>
-          buildDefaultDirectoryResponse(input, cursor, results)
-        );
-        break;
+  }
 
-      // Sendungen A-Z
-      case "az":
-        response = getAZ(token).then((results) =>
-          buildAZDirectoryResponse(input, cursor, results)
-        );
-        break;
+  // RootDirectories
+  switch (input.rootId) {
+    // Overview directory "zdf"
+    case "zdf":
+      response = getStartPage().then((results) =>
+        buildDefaultDirectoryResponse(input, cursor, results)
+      );
+      break;
 
-      // Sendung
-      case "brand":
-        // Sendung: input.id
-        response = getBrand(input.id, token).then((results) =>
-          buildDefaultDirectoryResponse(input, cursor, results)
-        );
-        break;
+    // Sendungen A-Z
+    case "az":
+      response = getAZ().then((results) =>
+        buildAZDirectoryResponse(input, cursor, results)
+      );
+      break;
 
-      // Meist gesehen
-      case "mostviewed":
-        response = getMostViewed(token).then((results) =>
-          buildDefaultDirectoryResponse(input, cursor, results)
-        );
-        break;
+    // Sendung
+    case "brand":
+      // Sendung: input.id
+      response = getBrand(input.id as string).then((results) =>
+        buildDefaultDirectoryResponse(input, cursor, results)
+      );
+      break;
 
-      // Neu in der Medithek
-      case "newses":
-        break;
+    // Meist gesehen
+    case "mostviewed":
+      response = getMostViewed().then((results) =>
+        buildDefaultDirectoryResponse(input, cursor, results)
+      );
+      break;
 
-      // Nachrichten
-      case "news":
-        break;
+    // Neu in der Medithek
+    case "newses":
+      break;
 
-      // Rubriken
-      case "category":
-        break;
-    }
+    // Nachrichten
+    case "news":
+      break;
+
+    // Rubriken
+    case "category":
+      break;
   }
 
   return response;
@@ -166,12 +163,10 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
     refreshInterval: 24 * 3600 * 1000,
   });
 
-  return getToken(ctx.cache)
-    .then((token) => getVideoItemById(input.ids.id, token))
-    .then((video) => {
-      if (!video) {
-        throw new Error("invalid item");
-      }
-      return buildResponseItem(input, video);
-    });
+  return getVideoItemById(input.ids.id).then((video) => {
+    if (!video) {
+      throw new Error("invalid item");
+    }
+    return buildResponseItem(input, video);
+  });
 };
