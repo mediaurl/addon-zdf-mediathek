@@ -62,10 +62,14 @@ const zdfMediathekAddon = createWorkerAddon({
       name: "ZDF: Meist gesehen",
       config: { showOnHomescreen: true },
     },
+    {
+      rootId: "categories",
+      name: "ZDF: Kategorien",
+    },
     /*
     { 
-      rootId: "az",
-      id: "az",
+      rootId: "sendungen-a-z",
+      id: "sendungen-a-z",
       name: "ZDF: Sendungen A-Z",
       config: { showOnHomescreen: false }
     }

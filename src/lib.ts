@@ -1,4 +1,3 @@
-import * as url from "url";
 import {
   Source,
   ItemResponse,
@@ -7,8 +6,7 @@ import {
   MovieItem,
   DirectoryResponse,
 } from "@watchedcom/sdk";
-import fetch from "node-fetch";
-import { getToken } from "./token";
+import { makeApiQuery, contentTypeMapping } from "./zdf.service";
 
 const FAKE_PLAYER_ID = "ngplayer_2_3";
 const API_URL = "https://api.zdf.de";
@@ -35,12 +33,6 @@ interface zdfSeriesItem extends zdfItem {
   name: string;
 }
 
-const makeApiQuery = async <T = any>(path: string): Promise<T> => {
-  return fetch(url.resolve("https://api.zdf.de/", path), {
-    headers: { "Api-Auth": `Bearer ${await getToken()}` },
-  }).then((resp) => resp.json());
-};
-
 // search
 export const searchVideos = async (query: string): Promise<zdfItem[]> => {
   return _parsePage(`search/documents?q=${query}`);
@@ -53,15 +45,13 @@ export const getStartPage = (): Promise<zdfItem[]> => {
   );
 };
 
-// content/documents/meist-gesehen-100.json?profile=default
 export const getMostViewed = async (): Promise<zdfItem[]> => {
   return _parsePage("content/documents/meist-gesehen-100.json?profile=default");
 };
 
 // Alle Sendungen von A-Z
-// content/documents/sendungen-100.json?profile=default
 export const getAZ = (): Promise<zdfItem[]> => {
-  return _parsePage("/content/documents/sendungen-100.json?profile=default");
+  return _parsePage("content/documents/sendungen-100.json?profile=default");
 };
 
 export const getNewest = (): Promise<zdfItem[]> => {
@@ -74,7 +64,7 @@ export const getBrand = (brand: string) => {
 };
 
 // Get a single video by id
-export const getVideoItemById = async (id): Promise<zdfItem | null> => {
+export const getVideoItemById = async (id: string): Promise<zdfItem | null> => {
   return makeApiQuery(`content/documents/${id}.json?profile=player`).then(
     async (js) => {
       const item = _grepItem(js);
@@ -280,13 +270,6 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
     console.info("!hasVideo");
     return null;
   }
-
-  const contentTypeMapping = {
-    //news: 'series',
-    episode: "series",
-    clip: "movie",
-    brand: "directory",
-  };
 
   const item = {
     id: target.id ?? "",

@@ -1,4 +1,4 @@
-import { WorkerHandlers } from "@watchedcom/sdk";
+import { WorkerHandlers, DirectoryItem, MovieItem } from "@watchedcom/sdk";
 import { i18n } from "./i18n";
 import {
   zdfItem,
@@ -10,6 +10,12 @@ import {
   getBrand,
   getStartPage,
 } from "./lib";
+import {
+  makeApiQuery,
+  makeCdnQuery,
+  CdnDocResponse,
+  contentTypeMapping,
+} from "./zdf.service";
 
 const buildDefaultDirectoryResponse = (
   input,
@@ -82,10 +88,10 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   ctx
 ) => {
   // Cache big request for 1 hour
-  await ctx.requestCache(input.rootId, {
-    ttl: 24 * 3600 * 1000,
-    refreshInterval: 1 * 3600 * 1000,
-  });
+  // await ctx.requestCache(input.rootId, {
+  //   ttl: 24 * 3600 * 1000,
+  //   refreshInterval: 1 * 3600 * 1000,
+  // });
   //   if (["zdf", "mostviewed"].indexOf(`${input.rootId}`) > -1) {
   //     await ctx.requestCache(input.rootId, {
   //       ttl: 24 * 3600 * 1000,
@@ -97,9 +103,8 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 
   //const t = await i18n.cloneInstance().changeLanguage(input.language);
 
+  const { rootId } = input;
   const cursor: number = <number>input.cursor || 1;
-
-  let response;
 
   // Perform search
   if (input["search"].length) {
@@ -108,51 +113,90 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
     );
   }
 
-  // RootDirectories
-  switch (input.rootId) {
-    // Overview directory "zdf"
-    case "zdf":
-      response = getStartPage().then((results) =>
-        buildDefaultDirectoryResponse(input, cursor, results)
-      );
-      break;
+  if (rootId === "categories") {
+    const data = await makeApiQuery(
+      <string>input.cursor || "/search/documents?q=&contentTypes=category"
+    );
 
-    // Sendungen A-Z
-    case "az":
-      response = getAZ().then((results) =>
-        buildAZDirectoryResponse(input, cursor, results)
-      );
-      break;
+    const results: any[] = data["http://zdf.de/rels/search/results"];
+    const nextCursor = data["next"] || null;
 
-    // Sendung
-    case "brand":
-      // Sendung: input.id
-      response = getBrand(input.id as string).then((results) =>
-        buildDefaultDirectoryResponse(input, cursor, results)
-      );
-      break;
+    return {
+      nextCursor,
+      items: results.map<DirectoryItem>((_) => {
+        const target = _["http://zdf.de/rels/target"];
+        const layouts = target["teaserImageRef"]["layouts"];
 
-    // Meist gesehen
-    case "mostviewed":
-      response = getMostViewed().then((results) =>
-        buildDefaultDirectoryResponse(input, cursor, results)
-      );
-      break;
-
-    // Neu in der Medithek
-    case "newses":
-      break;
-
-    // Nachrichten
-    case "news":
-      break;
-
-    // Rubriken
-    case "category":
-      break;
+        return {
+          type: "directory",
+          name: target["teaserHeadline"],
+          rootId: "category-entrypoint",
+          id: target.id,
+          images: {
+            poster: layouts["3000x3000"] || layouts["original"],
+          },
+        };
+      }),
+    };
   }
 
-  return response;
+  if (input.rootId === "category-entrypoint") {
+    const { cluster } = await makeCdnQuery<CdnDocResponse>(
+      `document/${input.id}`
+    );
+
+    return {
+      nextCursor: null,
+      items: cluster
+        .map((c) => {
+          return c.teaser
+            .map((_) => {
+              return {
+                type: contentTypeMapping[_.contentType],
+                ids: {
+                  id: _.id,
+                },
+                name: _.titel,
+                images: {
+                  poster: _.teaserBild[1].url,
+                },
+              };
+            })
+            .filter((_) => _.type);
+        })
+        .flat(Infinity),
+    };
+  }
+
+  // Overview directory "zdf"
+  if (rootId === "zdf") {
+    return getStartPage().then((results) =>
+      buildDefaultDirectoryResponse(input, cursor, results)
+    );
+  }
+
+  // Sendungen A-Z
+  if (rootId === "sendungen-a-z") {
+    return getAZ().then((results) =>
+      buildAZDirectoryResponse(input, cursor, results)
+    );
+  }
+
+  // Sendung
+  if (rootId === "brand") {
+    return getBrand(input.id as string).then((results) =>
+      buildDefaultDirectoryResponse(input, cursor, results)
+    );
+  }
+
+  // Meist gesehen
+  if (rootId === "mostviewed") {
+    return getMostViewed().then((results) =>
+      buildDefaultDirectoryResponse(input, cursor, results)
+    );
+  }
+
+  throw new Error(`No handler for category: ${rootId} / ${input.id}`);
 };
 
 export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
@@ -163,7 +207,7 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
     refreshInterval: 24 * 3600 * 1000,
   });
 
-  return getVideoItemById(input.ids.id).then((video) => {
+  return getVideoItemById(<string>input.ids.id).then((video) => {
     if (!video) {
       throw new Error("invalid item");
     }
