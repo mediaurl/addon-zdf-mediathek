@@ -87,18 +87,6 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   input,
   ctx
 ) => {
-  // Cache big request for 1 hour
-  // await ctx.requestCache(input.rootId, {
-  //   ttl: 24 * 3600 * 1000,
-  //   refreshInterval: 1 * 3600 * 1000,
-  // });
-  //   if (["zdf", "mostviewed"].indexOf(`${input.rootId}`) > -1) {
-  //     await ctx.requestCache(input.rootId, {
-  //       ttl: 24 * 3600 * 1000,
-  //       refreshInterval: 1 * 3600 * 1000,
-  //     });
-  //   }
-
   console.log("directory", input);
 
   //const t = await i18n.cloneInstance().changeLanguage(input.language);
@@ -112,6 +100,11 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
       buildDefaultDirectoryResponse(input, cursor, results)
     );
   }
+
+  await ctx.requestCache([input.rootId, input.id, input.cursor], {
+    ttl: 24 * 3600 * 1000,
+    refreshInterval: 1 * 3600 * 1000,
+  });
 
   if (rootId === "categories") {
     const data = await makeApiQuery(
