@@ -1,14 +1,13 @@
 import fetch from "node-fetch";
 
-// https://github.com/prof-membrane/script.module.libZdf/blob/master/lib/libZdfJsonParser.py#L10
-const token =
-  process.env.API_TOKEN ||
-  "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJOVDdrVWFTanNzNTZkaTZ5UjViQk9nbkpqZWw5QXQ1UGszX2JGcVRTMzFJIn0.eyJqdGkiOiIwOTFmMDdlMi0yNjY3LTRhMjQtYWVkNi00MTA4ZThjODNiYzMiLCJleHAiOjE1OTEyNjQ1NzYsIm5iZiI6MCwiaWF0IjoxNTkwNjU5Nzc2LCJpc3MiOiJodHRwczovL3Nzby1yaC1zc28uYXBwcy5vcGVuc2hpZnQuemRmLmRlL2F1dGgvcmVhbG1zLzNzY2FsZSIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiIzYzg5NDJkYS0wNjZjLTQ1M2YtYTQxYy0xMDI2NThmZTMzNjgiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJmNWYyMzA0YSIsImF1dGhfdGltZSI6MCwic2Vzc2lvbl9zdGF0ZSI6IjcyY2I4YTFmLTY5ZDMtNGUwMi1hYmZmLTNkZTcwNGJhZWIxMCIsImFjciI6IjEiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBlbWFpbCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiY2xpZW50SWQiOiJmNWYyMzA0YSIsImNsaWVudEhvc3QiOiIxNzIuMjMuNzUuMjQxIiwicHJlZmVycmVkX3VzZXJuYW1lIjoic2VydmljZS1hY2NvdW50LWY1ZjIzMDRhIiwiY2xpZW50QWRkcmVzcyI6IjE3Mi4yMy43NS4yNDEiLCJlbWFpbCI6InNlcnZpY2UtYWNjb3VudC1mNWYyMzA0YUBwbGFjZWhvbGRlci5vcmcifQ.BEtPM7Mo2VopQYi3IBaZEPQos85sYBl8MO5v0Uwp38EfvpfGSXXq_OIF1nCD6h7plSi0Xr5PLrJ2U4COxOILO20LTMBB4aJnhxE5utZQ6EXQUMorwrItSlk4-jQ1tSoshUVtEe9d0hzGFXCfgBp2m6j-E6kWkPNhJ6VFEgpExlxi3iTjj1IsW3HjAgFyAFrL-rAwGZq6Aky40RrPAGHgBP9_tbMZp-x6FQBXrTZZ910pj0ln3oyLveS5Ol-9fnaSWVPNIiYF7vLymE2O25FM5Qbkfvll7ZQhshgCB597V8MxzExoZWOKDeLLrzKU_cgF8rhreUks6HZVr11qvxH5yw";
+let _tokenP: null | Promise<string> = null;
 
 const _getTokenFromWeb = async () => {
-  const resp = await fetch("https://www.zdf.de");
+  const resp = await fetch(
+    "https://www.zdf.de/dokumentation/terra-x/unsere-waelder-die-sprache-der-baeume-100.html"
+  );
 
-  const tokenMatches = /apiToken: '(.*)'/gi.exec(await resp.text());
+  const tokenMatches = /"apiToken": "(.*)"/gi.exec(await resp.text());
 
   if (!tokenMatches) {
     throw new Error("Unable to get zdf apiToken");
@@ -19,6 +18,14 @@ const _getTokenFromWeb = async () => {
   return token;
 };
 
-export const getToken = async () => {
-  return token;
+export const getToken = () => {
+  if (!_tokenP) {
+    _tokenP = _getTokenFromWeb();
+  }
+
+  return _tokenP;
+};
+
+export const refreshToken = () => {
+  _tokenP = _getTokenFromWeb();
 };
