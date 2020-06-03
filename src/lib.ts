@@ -66,15 +66,21 @@ export const getBrand = (brand: string) => {
 // Get a single video by id
 export const getVideoItemById = async (id: string): Promise<zdfItem | null> => {
   return makeApiQuery(`content/documents/${id}.json?profile=player`).then(
-    async (js) => {
-      const item = _grepItem(js);
-      if (item) {
-        item.id = id;
-        const path = js.mainVideoContent["http://zdf.de/rels/target"][
-          "http://zdf.de/rels/streams/ptmd-template"
-        ].replace("{playerId}", FAKE_PLAYER_ID);
-        item.sources = await _getVideoSources(path);
+    async (data) => {
+      const item = _grepItem(data);
+
+      if (!item) {
+        throw new Error(`Unable to get item by id: ${id}`);
       }
+
+      item.id = id;
+
+      const path = data.mainVideoContent["http://zdf.de/rels/target"][
+        "http://zdf.de/rels/streams/ptmd-template"
+      ].replace("{playerId}", FAKE_PLAYER_ID);
+
+      item.sources = await _getVideoSources(path);
+
       return item;
     }
   );
@@ -335,25 +341,18 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
 };
 
 const _getVideoSources = async (path) => {
-  return makeApiQuery(path).then((data) => {
-    const sources: Source[] = [];
+  const item = await makeApiQuery(path).then((data) =>
+    (data.priorityList as any[]).find(
+      (item) => "h264_aac_mp4_http_na_na" === item.formitaeten[0]?.type
+    )
+  );
 
-    data.priorityList.map((item) => {
-      if ("h264_aac_mp4_http_na_na" === item.formitaeten[0]?.type) {
-        item.formitaeten[0].qualities.map((quality) => {
-          if (["veryhigh", "high", "low"].indexOf(quality.quality) > -1) {
-            sources.push({
-              //icon: "",
-              languages: [quality.audio.tracks[0].language.substr(0, 2)],
-              type: "url",
-              name: quality.quality,
-              url: `${quality.audio.tracks[0].uri}`,
-            });
-          }
-        });
-      }
-    });
-
-    return sources;
+  return (item.formitaeten[0].qualities as any[]).map<Source>((quality) => {
+    return {
+      type: "url",
+      languages: [quality.audio.tracks[0].language.substr(0, 2)],
+      name: quality.quality,
+      url: `${quality.audio.tracks[0].uri}`,
+    };
   });
 };
