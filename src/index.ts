@@ -5,7 +5,7 @@ const zdfMediathekAddon = createWorkerAddon({
   id: "zdf-mediathek",
   name: "ZDF Mediathek",
   version: "0.0.3",
-  icon: "https://www.zdf.de/favicon.ico",
+  icon: "https://www.zdf.de/static/img/appicons/favicon-144.png",
   itemTypes: ["movie", "series", "directory"],
   actions: ["directory", "item", "resolve"],
   defaultDirectoryFeatures: {
