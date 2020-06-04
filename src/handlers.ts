@@ -108,7 +108,8 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 
   if (rootId === "categories") {
     const data = await makeApiQuery(
-      <string>input.cursor || "/search/documents?q=&contentTypes=category"
+      <string>input.cursor ||
+        "/search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category"
     );
 
     const results: any[] = data["http://zdf.de/rels/search/results"];
@@ -164,20 +165,6 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   // Overview directory "zdf"
   if (rootId === "zdf") {
     return getStartPage().then((results) =>
-      buildDefaultDirectoryResponse(input, cursor, results)
-    );
-  }
-
-  // Sendungen A-Z
-  if (rootId === "sendungen-a-z") {
-    return getAZ().then((results) =>
-      buildAZDirectoryResponse(input, cursor, results)
-    );
-  }
-
-  // Sendung
-  if (rootId === "brand") {
-    return getBrand(input.id as string).then((results) =>
       buildDefaultDirectoryResponse(input, cursor, results)
     );
   }
