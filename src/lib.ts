@@ -6,7 +6,7 @@ import {
   MovieItem,
   DirectoryResponse,
 } from "@watchedcom/sdk";
-import { makeApiQuery, contentTypeMapping } from "./zdf.service";
+import { makeApiQuery, resolveContentType } from "./zdf.service";
 
 const FAKE_PLAYER_ID = "ngplayer_2_3";
 const API_URL = "https://api.zdf.de";
@@ -32,36 +32,6 @@ interface zdfSeriesItem extends zdfItem {
   episode: number;
   name: string;
 }
-
-// search
-export const searchVideos = async (query: string): Promise<zdfItem[]> => {
-  return _parsePage(`search/documents?q=${query}`);
-};
-
-// start-page
-export const getStartPage = (): Promise<zdfItem[]> => {
-  return _parsePage(
-    "content/documents/zdf-startseite-100.json?profile=default"
-  );
-};
-
-export const getMostViewed = async (): Promise<zdfItem[]> => {
-  return _parsePage("content/documents/meist-gesehen-100.json?profile=default");
-};
-
-// Alle Sendungen von A-Z
-export const getAZ = (): Promise<zdfItem[]> => {
-  return _parsePage("content/documents/sendungen-100.json?profile=default");
-};
-
-export const getNewest = (): Promise<zdfItem[]> => {
-  return _parsePage(`content/documents/meist-gesehen-100.json?profile=default`);
-};
-
-//
-export const getBrand = (brand: string) => {
-  return _parsePage(`content/documents/${brand}.json?profile=default`);
-};
 
 // Get a single video by id
 export const getVideoItemById = async (id: string): Promise<zdfItem | null> => {
@@ -135,110 +105,6 @@ export const buildResponseItem = (
   return item;
 };
 
-const _parsePage = async (path: string): Promise<zdfItem[]> => {
-  return makeApiQuery(path).then((json) => {
-    let items: zdfItem[] = [];
-    switch (json.profile) {
-      case "http://zdf.de/rels/content/page-home":
-        items = _parseStartPage(json);
-        break;
-
-      case "http://zdf.de/rels/content/page-index":
-        items = _parsePageIndex(json);
-        break;
-
-      case "http://zdf.de/rels/search/result":
-        items = _parseSearchResult(json);
-        break;
-
-      case "http://zdf.de/rels/search/result-page":
-        items = _parseSearchPage(json);
-        break;
-
-      case "http://zdf.de/rels/content/special-page-brand-a-z":
-        items = _parseBrandsPage(json);
-        break;
-
-      default:
-        console.log(`Unknown profile ${json.profile}`);
-        break;
-    }
-
-    return items ?? [];
-  });
-};
-
-const _parseStartPage = (json): zdfItem[] => {
-  return json.module[0].teaser
-    .map((teaser) => _grepItem(teaser["http://zdf.de/rels/target"]))
-    .filter((item) => !!item);
-};
-
-const _parseSearchPage = (json): zdfItem[] => {
-  return json["http://zdf.de/rels/search/results"]
-    .map((result) =>
-      undefined === result["http://zdf.de/rels/target"]
-        ? false
-        : _grepItem(result["http://zdf.de/rels/target"])
-    )
-    .filter((item) => !!item);
-};
-
-const _parseSearchResult = (json): zdfItem[] => {
-  return json.module
-    .map(
-      (module) =>
-        module.filterRef.resultsWithVideo["http://zdf.de/rels/search/results"]
-    )
-    .map((result) =>
-      undefined === result["http://zdf.de/rels/target"]
-        ? false
-        : _grepItem(result["http://zdf.de/rels/target"])
-    )
-    .filter((item) => !!item);
-};
-
-const _parsePageIndex = (json): zdfItem[] => {
-  return ("contentType" in json && json.contentType == "brand"
-    ? [json["http://zdf.de/rels/brand"]]
-    : json.module.shift().filterRef.resultsWithVideo[
-        "http://zdf.de/rels/search/results"
-      ]
-  )
-    .map((result) =>
-      undefined === result["http://zdf.de/rels/target"]
-        ? false
-        : _grepItem(result["http://zdf.de/rels/target"])
-    )
-    .filter((item) => !!item);
-
-  /*
-    return (('contentType' in json) && json.contentType == 'brand'? [json['http://zdf.de/rels/brand']]: json.module.shift().filterRef.resultsWithVideo['http://zdf.de/rels/search/results'])
-    .map((result) => {
-        //console.dir(result);
-        return undefined === result['http://zdf.de/rels/target']? false: _grepItem(result['http://zdf.de/rels/target']);
-    })
-    .filter(item => !!item);
-    */
-};
-
-const _parseBrandsPage = (json): zdfItem[] => {
-  //console.dir(json,false);
-  return json.brand
-    .flatMap((brand) =>
-      !("teaser" in brand)
-        ? null
-        : brand.teaser
-            .map((teaser) =>
-              undefined === teaser["http://zdf.de/rels/target"]
-                ? false
-                : _grepItem(teaser["http://zdf.de/rels/target"])
-            )
-            .filter((item) => !!item)
-    )
-    .filter((item) => !!item);
-};
-
 const _grepImage = (target) => {
   if (target.contentType === "brand" && "stage" in target) {
     return (
@@ -297,7 +163,7 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
         return null;
       }
       item.title = content.title;
-      item.type = contentTypeMapping[target.contentType];
+      item.type = resolveContentType(target.contentType);
       item.url =
         API_URL +
         content["http://zdf.de/rels/streams/ptmd-template"].replace(
@@ -317,7 +183,7 @@ const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
 
     case "brand":
       //console.dir(target, {depth:12});
-      item.type = contentTypeMapping[target.contentType];
+      item.type = resolveContentType(target.contentType);
 
       if ("http://zdf.de/rels/search/page-video-counter-with-video" in target) {
         item.url =

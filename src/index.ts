@@ -51,30 +51,19 @@ const zdfMediathekAddon = createWorkerAddon({
   ],
   dashboards: [
     {
-      rootId: "zdf",
-      id: "zdf",
+      id: "zdf-startseite-110",
       name: "ZDF Mediathek",
       config: { showOnHomescreen: true },
-      //itemTypes: ["directory", "series", "movie"]
     },
     {
-      rootId: "mostviewed",
-      id: "mostviewed",
+      id: "meist-gesehen-100",
       name: "ZDF: Meist gesehen",
       config: { showOnHomescreen: true },
     },
     {
-      rootId: "categories",
+      id: "categories",
       name: "ZDF: Kategorien",
     },
-    /*
-    { 
-      rootId: "sendungen-a-z",
-      id: "sendungen-a-z",
-      name: "ZDF: Sendungen A-Z",
-      config: { showOnHomescreen: false }
-    }
-    */
   ],
 });
 

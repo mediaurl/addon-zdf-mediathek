@@ -42,9 +42,20 @@ export interface CdnDocResponse {
   }[];
 }
 
-export const contentTypeMapping: { [contentType: string]: ItemTypes } = {
-  //news: 'series',
+const contentTypeMapping: { [contentType: string]: ItemTypes } = {
+  news: "series",
   episode: "series",
   clip: "movie",
   brand: "directory",
+  category: "directory",
+};
+
+export const resolveContentType = (contentType: string): ItemTypes => {
+  const value = contentTypeMapping[contentType];
+
+  if (!value) {
+    throw new Error(`Unable to resolve type: ${contentType}`);
+  }
+
+  return value;
 };

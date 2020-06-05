@@ -1,86 +1,67 @@
-import { WorkerHandlers, DirectoryItem, MovieItem } from "@watchedcom/sdk";
-import { i18n } from "./i18n";
 import {
-  zdfItem,
-  searchVideos,
-  getAZ,
-  getMostViewed,
-  getVideoItemById,
-  buildResponseItem,
-  getBrand,
-  getStartPage,
-} from "./lib";
+  WorkerHandlers,
+  DirectoryItem,
+  MovieItem,
+  DirectoryResponse,
+  MainItem,
+} from "@watchedcom/sdk";
+import { i18n } from "./i18n";
+import { zdfItem, getVideoItemById, buildResponseItem } from "./lib";
 import {
   makeApiQuery,
   makeCdnQuery,
   CdnDocResponse,
-  contentTypeMapping,
+  resolveContentType,
 } from "./zdf.service";
 
-const buildDefaultDirectoryResponse = (
-  input,
-  cursor: number = 0,
-  results: zdfItem[]
-) => {
-  const response = {
-    nextCursor:
-      ["mostviewed", "zdf", "az"].indexOf(input.rootId) > -1
-        ? null
-        : results.length
-        ? cursor + 1
-        : null,
-    features: {
-      filter: [],
-      search: { enabled: ["zdf", "az"].indexOf(input.rootId) == -1 },
-    },
-    options: {
-      displayName: true,
-    },
-    items: results.map((item) => {
-      const id = item.id;
+const mapSearchResp = (json: any): DirectoryResponse => {
+  const results: any[] = json["http://zdf.de/rels/search/results"];
+  const nextCursor = json["next"] || null;
+
+  return {
+    nextCursor,
+    items: results.map<MainItem>((_) => {
+      const target = _["http://zdf.de/rels/target"];
+      const layouts = target["teaserImageRef"]["layouts"];
+
       return {
-        id,
-        ids: { id },
-        type: item.type,
-        name: item.title,
-        language: item.language ?? "de",
-        images: { poster: item.thumbnail },
+        type: resolveContentType(target.contentType),
+        name: target["teaserHeadline"],
+        id: target.id,
+        ids: { id: target.id },
+        images: {
+          poster: layouts["3000x3000"] || layouts["original"],
+        },
       };
     }),
   };
-
-  return response;
 };
 
-const buildAZDirectoryResponse = (
-  input,
-  cursor: number = 0,
-  results: zdfItem[]
-) => {
-  const response = {
-    nextCursor: results.length ? cursor + 1 : null,
-    features: {
-      filter: [],
-      search: { enabled: true },
-    },
-    options: {
-      displayName: true,
-    },
-    items: results.map((item) => {
-      const id = item.id;
-      return {
-        rootId: "brand",
-        id,
-        ids: { id },
-        type: item.type,
-        name: item.title,
-        language: item.language ?? "de",
-        images: { poster: item.thumbnail },
-      };
-    }),
-  };
+const mapCdnResp = (json: any) => {
+  const { cluster, stage } = json;
 
-  return response;
+  return {
+    nextCursor: null,
+    items: cluster
+      .map((c) => {
+        return c.teaser
+          .filter((_) => _.type === "video")
+          .map((_) => {
+            return {
+              type: resolveContentType(_.contentType),
+              ids: {
+                id: _.id,
+              },
+              name: _.titel,
+              images: {
+                poster: _.teaserBild[1].url,
+              },
+            };
+          })
+          .filter((_) => _.type);
+      })
+      .flat(Infinity),
+  };
 };
 
 export const directoryHandler: WorkerHandlers["directory"] = async (
@@ -91,92 +72,28 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 
   //const t = await i18n.cloneInstance().changeLanguage(input.language);
 
-  const { rootId } = input;
-  const cursor: number = <number>input.cursor || 1;
+  const { id } = input;
+  const search = input.search;
+  const cursor = <string>input.cursor;
 
-  // Perform search
-  if (input["search"].length) {
-    return searchVideos(input.search).then((results) =>
-      buildDefaultDirectoryResponse(input, cursor, results)
-    );
+  await ctx.requestCache([id, cursor, search]);
+
+  if (search) {
+    return makeApiQuery(
+      cursor || `search/documents?hasVideo=true&types=page-video&q=${search}`
+    ).then(mapSearchResp);
   }
 
-  await ctx.requestCache([input.rootId, input.id, input.cursor], {
-    ttl: 24 * 3600 * 1000,
-    refreshInterval: 1 * 3600 * 1000,
-  });
-
-  if (rootId === "categories") {
-    const data = await makeApiQuery(
-      <string>input.cursor ||
-        "/search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category"
-    );
-
-    const results: any[] = data["http://zdf.de/rels/search/results"];
-    const nextCursor = data["next"] || null;
-
-    return {
-      nextCursor,
-      items: results.map<DirectoryItem>((_) => {
-        const target = _["http://zdf.de/rels/target"];
-        const layouts = target["teaserImageRef"]["layouts"];
-
-        return {
-          type: "directory",
-          name: target["teaserHeadline"],
-          rootId: "category-entrypoint",
-          id: target.id,
-          images: {
-            poster: layouts["3000x3000"] || layouts["original"],
-          },
-        };
-      }),
-    };
+  if (id === "categories") {
+    return makeApiQuery(
+      cursor ||
+        `search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category`
+    ).then(mapSearchResp);
   }
 
-  if (input.rootId === "category-entrypoint") {
-    const { cluster } = await makeCdnQuery<CdnDocResponse>(
-      `document/${input.id}`
-    );
+  return makeCdnQuery<CdnDocResponse>(`document/${input.id}`).then(mapCdnResp);
 
-    return {
-      nextCursor: null,
-      items: cluster
-        .map((c) => {
-          return c.teaser
-            .map((_) => {
-              return {
-                type: contentTypeMapping[_.contentType],
-                ids: {
-                  id: _.id,
-                },
-                name: _.titel,
-                images: {
-                  poster: _.teaserBild[1].url,
-                },
-              };
-            })
-            .filter((_) => _.type);
-        })
-        .flat(Infinity),
-    };
-  }
-
-  // Overview directory "zdf"
-  if (rootId === "zdf") {
-    return getStartPage().then((results) =>
-      buildDefaultDirectoryResponse(input, cursor, results)
-    );
-  }
-
-  // Meist gesehen
-  if (rootId === "mostviewed") {
-    return getMostViewed().then((results) =>
-      buildDefaultDirectoryResponse(input, cursor, results)
-    );
-  }
-
-  throw new Error(`No handler for category: ${rootId} / ${input.id}`);
+  // throw new Error(`No handler for category: ${rootId} / ${input.id}`);
 };
 
 export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
