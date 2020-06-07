@@ -1,224 +1,48 @@
-import {
-  Source,
-  ItemResponse,
-  SeriesItem,
-  SeriesEpisodeItem,
-  MovieItem,
-  DirectoryResponse,
-} from "@watchedcom/sdk";
-import { makeApiQuery, resolveContentType } from "./zdf.service";
+import { Source, SeriesEpisodeItem, PlayableItem } from "@watchedcom/sdk";
+import { resolveContentType, makeCdnQuery } from "./zdf.service";
 
-const FAKE_PLAYER_ID = "ngplayer_2_3";
-const API_URL = "https://api.zdf.de";
-
-export interface zdfItem {
-  id: string;
-  type: "iptv" | "movie" | "series";
-  title: string;
-  description: string;
-  language: string | null;
-  thumbnail: string;
-  url: string;
-  sources: Source[] | null;
-}
-
-interface zdfMovieItem extends zdfItem {
-  type: "movie";
-}
-
-interface zdfSeriesItem extends zdfItem {
-  type: "series";
-  season: number;
-  episode: number;
-  name: string;
-}
-
-// Get a single video by id
-export const getVideoItemById = async (id: string): Promise<zdfItem | null> => {
-  return makeApiQuery(`content/documents/${id}.json?profile=player`).then(
-    async (data) => {
-      const item = _grepItem(data);
-
-      if (!item) {
-        throw new Error(`Unable to get item by id: ${id}`);
-      }
-
-      item.id = id;
-
-      const path = data.mainVideoContent["http://zdf.de/rels/target"][
-        "http://zdf.de/rels/streams/ptmd-template"
-      ].replace("{playerId}", FAKE_PLAYER_ID);
-
-      item.sources = await _getVideoSources(path);
-
-      return item;
-    }
-  );
-};
-
-export const buildResponseItem = (
-  input,
-  video: zdfItem | zdfSeriesItem
-): ItemResponse => {
-  let item;
-
-  switch (video.type) {
-    case "series":
-      item = <SeriesItem>{
-        ids: input.ids,
-        name: video["name"] ?? video.title,
-        description: video.description,
-        language: video.language ?? "de",
-        images: {
-          poster: video.thumbnail,
-        },
-        type: video.type,
-        episodes: [
-          <SeriesEpisodeItem>{
-            ids: input.ids,
-            name: video.title,
-            description: video.description,
-            episode: video["episode"] ?? 1,
-            season: video["season"] ?? 1,
-            sources: video.sources,
-          },
-        ],
+export const getVideoById = async (id: string): Promise<PlayableItem> => {
+  const { document } = await makeCdnQuery(`document/${id}`);
+  const name = document.titel;
+  const type = resolveContentType(document.contentType);
+  const description = document.beschreibung;
+  const sources: Source[] = (document.formitaeten as any[])
+    .filter((_) => _.type === "h264_aac_ts_http_m3u8_http")
+    .map<Source>((_) => {
+      return {
+        type: "url",
+        url: _.url,
+        name: _.quality,
+        languages: [_.language.substring(0, 2)],
       };
+    });
 
-      break;
+  if (type === "directory") {
+    throw new Error("Not playable item");
+  }
 
-    case "movie":
-      item = <MovieItem>{
-        ids: input.ids,
-        name: video.title,
-        description: video.description,
-        language: video.language ?? "de",
-        images: {
-          poster: video.thumbnail,
-        },
-        type: video.type,
-        sources: video.sources,
-      };
-      break;
+  const item: PlayableItem = {
+    type,
+    ids: { id },
+    name,
+    description,
+    images: { poster: document.teaserBild["1"].url },
+    // sources
+  };
+
+  const episode: SeriesEpisodeItem = {
+    name,
+    season: 1,
+    episode: 1,
+    ids: { id },
+    sources,
+  };
+
+  if (item.type === "series") {
+    Object.assign(item, { episodes: [episode] });
+  } else {
+    Object.assign(item, { sources });
   }
 
   return item;
-};
-
-const _grepImage = (target) => {
-  if (target.contentType === "brand" && "stage" in target) {
-    return (
-      target.stage[0].teaser[0]["http://zdf.de/rels/target"].layouts[
-        "768xauto"
-      ] ||
-      target.stage[0].teaser[0]["http://zdf.de/rels/target"].layouts[
-        "1920x1080"
-      ]
-    );
-  }
-
-  if ("teaserImageRef" in target && "layouts" in target.teaserImageRef) {
-    return (
-      target.teaserImageRef.layouts["768xauto"] ||
-      target.teaserImageRef.layouts["1920x1080"]
-    );
-  }
-  return "";
-};
-
-const _grepItem = (target): zdfItem | zdfSeriesItem | zdfMovieItem | null => {
-  //console.log("target");
-  //console.dir(target,{depth:12});
-  if (target["profile"] == "http://zdf.de/rels/not-found") {
-    console.info("not-found");
-    return null;
-  }
-  if (target["profile"] == "http://zdf.de/rels/gone") {
-    console.info("gone");
-    return null;
-  }
-
-  if (!target["hasVideo"]) {
-    console.info("!hasVideo");
-    return null;
-  }
-
-  const item = {
-    id: target.id ?? "",
-    type: "",
-    title: target.altText ?? target.title ?? target.teaserHeadline ?? "",
-    description: target.teasertext ?? "",
-    thumbnail: _grepImage(target),
-    url: "",
-    sources: [],
-  };
-
-  switch (target.contentType) {
-    //case 'news':
-    case "episode":
-    case "clip":
-      const content = target.mainVideoContent["http://zdf.de/rels/target"];
-      if (undefined === content["http://zdf.de/rels/streams/ptmd-template"]) {
-        console.log("No ptmd", content);
-        return null;
-      }
-      item.title = content.title;
-      item.type = resolveContentType(target.contentType);
-      item.url =
-        API_URL +
-        content["http://zdf.de/rels/streams/ptmd-template"].replace(
-          "{playerId}",
-          FAKE_PLAYER_ID
-        );
-
-      if (item.type === "series") {
-        const brand = target["http://zdf.de/rels/brand"];
-
-        item["name"] = brand.title;
-        item["episode"] = 1;
-        item["season"] = 1;
-      }
-
-      break;
-
-    case "brand":
-      //console.dir(target, {depth:12});
-      item.type = resolveContentType(target.contentType);
-
-      if ("http://zdf.de/rels/search/page-video-counter-with-video" in target) {
-        item.url =
-          API_URL +
-          target["http://zdf.de/rels/search/page-video-counter-with-video"][
-            "self"
-          ].replace(/&limit=0/, "&limit=100");
-      } else if ("stage" in target) {
-        item.url = target.id;
-      }
-      break;
-
-    default:
-      console.log(`Invalid content type ${target.contentType}`);
-      return null;
-      break;
-  }
-
-  // TODO: Dirty fixed typing error with <any> to make tsc work
-  return <any>item;
-};
-
-const _getVideoSources = async (path) => {
-  const item = await makeApiQuery(path).then((data) =>
-    (data.priorityList as any[]).find(
-      (item) => "h264_aac_mp4_http_na_na" === item.formitaeten[0]?.type
-    )
-  );
-
-  return (item.formitaeten[0].qualities as any[]).map<Source>((quality) => {
-    return {
-      type: "url",
-      languages: [quality.audio.tracks[0].language.substr(0, 2)],
-      name: quality.quality,
-      url: `${quality.audio.tracks[0].uri}`,
-    };
-  });
 };

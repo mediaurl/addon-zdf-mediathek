@@ -6,7 +6,7 @@ import {
   MainItem,
 } from "@watchedcom/sdk";
 import { i18n } from "./i18n";
-import { zdfItem, getVideoItemById, buildResponseItem } from "./lib";
+import { getVideoById } from "./lib";
 import {
   makeApiQuery,
   makeCdnQuery,
@@ -99,15 +99,7 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
   console.log("item", input);
 
-  await ctx.requestCache(input.ids.id, {
-    ttl: Infinity,
-    refreshInterval: 24 * 3600 * 1000,
-  });
+  await ctx.requestCache(input.ids.id);
 
-  return getVideoItemById(<string>input.ids.id).then((video) => {
-    if (!video) {
-      throw new Error("invalid item");
-    }
-    return buildResponseItem(input, video);
-  });
+  return getVideoById(input.ids.id as string);
 };
