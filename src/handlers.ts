@@ -32,7 +32,14 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   if (id === "categories") {
     return makeApiQuery(
       cursor ||
-        `search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category`
+        `/search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category`
+    ).then(mapSearchResp);
+  }
+
+  if (id === "recently-added") {
+    return makeApiQuery(
+      cursor ||
+        `/search/documents?q=*&hasVideo=true&limit=20&contentTypes=episode&sortBy=date&sortOrder=desc`
     ).then(mapSearchResp);
   }
 

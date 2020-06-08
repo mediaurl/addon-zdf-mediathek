@@ -85,7 +85,10 @@ export const mapSearchResp = (json: any): DirectoryResponse => {
         id: target.id,
         ids: { id: target.id },
         images: {
-          poster: layouts["3000x3000"] || layouts["original"],
+          poster:
+            layouts["3000x3000"] ||
+            layouts["original"] ||
+            Object.values(layouts)[0],
         },
       };
     }),

@@ -64,6 +64,10 @@ const zdfMediathekAddon = createWorkerAddon({
       id: "categories",
       name: "ZDF: Kategorien",
     },
+    {
+      id: "recently-added",
+      name: "ZDF: Kürzlich hinzugefügt",
+    },
   ],
 });
 
