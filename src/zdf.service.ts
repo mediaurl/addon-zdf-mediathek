@@ -103,10 +103,15 @@ export const mapCdnClusterResp = (json: any) => {
     items: cluster
       .map((c) => {
         return c.teaser
-          .filter((_) => _.type === "video")
+          .filter((_) => {
+            return (
+              Object.keys(contentTypeMapping).indexOf(_.contentType) !== -1
+            );
+          })
           .map((_) => {
             return {
               type: resolveContentType(_.contentType),
+              id: _.id,
               ids: {
                 id: _.id,
               },
