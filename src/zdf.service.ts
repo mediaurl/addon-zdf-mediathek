@@ -120,8 +120,7 @@ export const mapCdnClusterResp = (json: any) => {
                 poster: _.teaserBild[1].url,
               },
             };
-          })
-          .filter((_) => _.type);
+          });
       })
       .flat(Infinity),
   };
@@ -135,7 +134,9 @@ export const mapCdnDocResp = (data: any) => {
   const type = resolveContentType(document.contentType);
   const description = document.beschreibung;
   const sources: Source[] = (document.formitaeten as any[])
-    .filter((_) => _.type === "h264_aac_ts_http_m3u8_http")
+    .filter(
+      (_) => _.type === "h264_aac_ts_http_m3u8_http" && _.class === "main"
+    )
     .map<Source>((_) => {
       return {
         type: "url",
