@@ -8,6 +8,7 @@ import {
   Source,
   PlayableItem,
   SeriesEpisodeItem,
+  Subtitle,
 } from "@watchedcom/sdk";
 
 const throwIfNotOk = async (resp: Response) => {
@@ -55,6 +56,7 @@ const contentTypeMapping: { [contentType: string]: ItemTypes } = {
   news: "series",
   episode: "series",
   clip: "movie",
+  // brand: "series",
   brand: "directory",
   category: "directory",
 };
@@ -127,12 +129,13 @@ export const mapCdnClusterResp = (json: any) => {
 };
 
 export const mapCdnDocResp = (data: any) => {
-  const { document } = data;
+  const { document, cluster } = data;
   const { id } = document;
 
   const name = document.titel;
   const type = resolveContentType(document.contentType);
   const description = document.beschreibung;
+
   const sources: Source[] = (document.formitaeten as any[])
     .filter(
       (_) => _.type === "h264_aac_ts_http_m3u8_http" && _.class === "main"
@@ -143,6 +146,14 @@ export const mapCdnDocResp = (data: any) => {
         url: _.url,
         name: _.quality,
         languages: [_.language.substring(0, 2)],
+        subtitles: (<any[]>document.captions || [])
+          .filter((_) => _.format === "webvtt")
+          .map<Subtitle>((_) => ({
+            name: `Language - ${_.language}`,
+            url: _.uri,
+            type: "vtt",
+            language: _.language.substring(0, 2),
+          })),
       };
     });
 
@@ -161,8 +172,8 @@ export const mapCdnDocResp = (data: any) => {
 
   const episode: SeriesEpisodeItem = {
     name,
-    season: 1,
-    episode: 1,
+    season: document.seasonNumber || 1,
+    episode: document.episodeNumber || 1,
     ids: { id },
     sources,
   };
