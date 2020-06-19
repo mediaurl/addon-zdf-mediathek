@@ -18,7 +18,7 @@ const zdfMediathekAddon = createWorkerAddon({
   rootDirectories: [
     {
       id: "categories",
-      name: "ZDF: Kategorien",
+      name: "ZDF",
       search: { enabled: true },
     },
   ],
