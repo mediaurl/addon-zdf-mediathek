@@ -17,37 +17,10 @@ const zdfMediathekAddon = createWorkerAddon({
   },
   rootDirectories: [
     {
-      id: "mostviewed",
-      features: {
-        search: { enabled: false },
-      },
+      id: "categories",
+      name: "ZDF: Kategorien",
+      search: { enabled: true },
     },
-    /*
-    {
-      id: "az",
-      features: {
-        search: { enabled: true },
-      },
-    },
-    {
-      id: "newest",
-      features: {
-        search: { enabled: false }
-      },
-    },
-    {
-      id: "news",
-      features: {
-        search: { enabled: false }
-      },
-    },
-    {
-      id: "category",
-      features: {
-        search: { enabled: false }
-      },
-    }
-    */
   ],
   dashboards: [
     {
