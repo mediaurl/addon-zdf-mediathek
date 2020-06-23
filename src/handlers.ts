@@ -1,4 +1,5 @@
 import { WorkerHandlers, ResolvedUrl } from "@watchedcom/sdk";
+import * as url from "url";
 import {
   makeApiQuery,
   makeCdnQuery,
@@ -8,8 +9,6 @@ import {
   mapCdnDocResp,
   extractSources,
 } from "./zdf.service";
-
-const resolveRegex = new RegExp(`zdf-mediathek:(.*)`, "ig");
 
 export const directoryHandler: WorkerHandlers["directory"] = async (
   input,
@@ -61,7 +60,7 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
 };
 
 export const resolveHandler: WorkerHandlers["resolve"] = async (input, ctx) => {
-  const id = resolveRegex.exec(input.url);
+  const id = url.parse(input.url).hostname;
 
   if (!id) throw new Error(`Unable to extract id from ${input.url}`);
 

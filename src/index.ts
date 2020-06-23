@@ -6,7 +6,7 @@ import {
   resolveHandler,
 } from "./handlers";
 
-const zdfMediathekAddon = createWorkerAddon({
+export const zdfMediathekAddon = createWorkerAddon({
   id: "zdf-mediathek",
   name: "ZDF Mediathek",
   version: "0.0.3",

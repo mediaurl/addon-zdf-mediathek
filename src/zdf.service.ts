@@ -10,6 +10,7 @@ import {
   SeriesEpisodeItem,
   Subtitle,
 } from "@watchedcom/sdk";
+import { zdfMediathekAddon } from ".";
 
 const throwIfNotOk = async (resp: Response) => {
   const errorText = `${resp.statusText} (HTTP ${resp.status}) on ${resp.url}`;
@@ -202,7 +203,7 @@ export const mapCdnDocResp = (data: any) => {
           name: _.titel,
           id: _.id,
           type: "url",
-          url: `zdf-mediathek:${_.id}`,
+          url: `${zdfMediathekAddon.getId()}:${_.id}`,
         };
       }),
   };
