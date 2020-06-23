@@ -1,5 +1,10 @@
 import { createWorkerAddon, runCli } from "@watchedcom/sdk";
-import { directoryHandler, itemHandler } from "./handlers";
+import {
+  directoryHandler,
+  itemHandler,
+  sourceHandler,
+  resolveHandler,
+} from "./handlers";
 
 const zdfMediathekAddon = createWorkerAddon({
   id: "zdf-mediathek",
@@ -47,6 +52,10 @@ const zdfMediathekAddon = createWorkerAddon({
 zdfMediathekAddon.registerActionHandler("directory", directoryHandler);
 
 zdfMediathekAddon.registerActionHandler("item", itemHandler);
+
+zdfMediathekAddon.registerActionHandler("source", sourceHandler);
+
+zdfMediathekAddon.registerActionHandler("resolve", resolveHandler);
 
 runCli([zdfMediathekAddon], {
   singleMode: true,

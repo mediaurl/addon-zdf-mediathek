@@ -1,5 +1,4 @@
-import { WorkerHandlers } from "@watchedcom/sdk";
-import { i18n } from "./i18n";
+import { WorkerHandlers, ResolvedUrl } from "@watchedcom/sdk";
 import {
   makeApiQuery,
   makeCdnQuery,
@@ -7,7 +6,10 @@ import {
   mapCdnClusterResp,
   mapSearchResp,
   mapCdnDocResp,
+  extractSources,
 } from "./zdf.service";
+
+const resolveRegex = new RegExp(`zdf-mediathek:(.*)`, "ig");
 
 export const directoryHandler: WorkerHandlers["directory"] = async (
   input,
@@ -32,14 +34,14 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   if (id === "categories") {
     return makeApiQuery(
       cursor ||
-        `/search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category`
+        `search/documents?hasVideo=true&sortOrder=desc&sortBy=views&contentTypes=category`
     ).then(mapSearchResp);
   }
 
   if (id === "recently-added") {
     return makeApiQuery(
       cursor ||
-        `/search/documents?q=*&hasVideo=true&limit=20&contentTypes=episode&sortBy=date&sortOrder=desc`
+        `search/documents?q=*&hasVideo=true&limit=20&contentTypes=episode&sortBy=date&sortOrder=desc`
     ).then(mapSearchResp);
   }
 
@@ -56,4 +58,32 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
   await ctx.requestCache(input.ids.id);
 
   return makeCdnQuery(`document/${input.ids.id}`).then(mapCdnDocResp);
+};
+
+export const resolveHandler: WorkerHandlers["resolve"] = async (input, ctx) => {
+  const id = resolveRegex.exec(input.url);
+
+  if (!id) throw new Error(`Unable to extract id from ${input.url}`);
+
+  return makeCdnQuery(`document/${id[1]}`).then(({ document }) => {
+    const result = <ResolvedUrl[]>extractSources(document);
+
+    return result;
+  });
+};
+
+export const sourceHandler: WorkerHandlers["source"] = async (input, ctx) => {
+  const {
+    ids: { id },
+    episode,
+  } = input;
+  const episodeId = episode.ids?.id;
+
+  const targetId = episodeId ?? id;
+
+  const result = await makeCdnQuery(
+    `document/${targetId}`
+  ).then(({ document }) => extractSources(document));
+
+  return result;
 };

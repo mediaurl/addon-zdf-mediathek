@@ -54,11 +54,43 @@ export interface CdnDocResponse {
 
 const contentTypeMapping: { [contentType: string]: ItemTypes } = {
   news: "series",
-  episode: "series",
+  episode: "movie",
   clip: "movie",
-  // brand: "series",
-  brand: "directory",
+  brand: "series",
   category: "directory",
+};
+
+export const extractEpisode = (teaser: any): SeriesEpisodeItem => {
+  return {
+    name: teaser.titel,
+    description: teaser.beschreibung,
+    season: teaser.seasonNumber || 1,
+    episode: teaser.episodeNumber || 1,
+    ids: { id: teaser.id },
+  };
+};
+
+export const extractSources = (document: any): Source[] => {
+  return ((document.formitaeten || []) as any[])
+    .filter(
+      (_) => _.type === "h264_aac_ts_http_m3u8_http" && _.class === "main"
+    )
+    .map<Source>((_) => {
+      return {
+        type: "url",
+        url: _.url,
+        name: _.quality,
+        languages: [_.language.substring(0, 2)],
+        subtitles: (<any[]>document.captions || [])
+          .filter((_) => _.format === "webvtt")
+          .map<Subtitle>((_) => ({
+            name: `Language - ${_.language}`,
+            url: _.uri,
+            type: "vtt",
+            language: _.language.substring(0, 2),
+          })),
+      };
+    });
 };
 
 const resolveContentType = (contentType: string): ItemTypes => {
@@ -119,7 +151,9 @@ export const mapCdnClusterResp = (json: any) => {
               },
               name: _.titel,
               images: {
-                poster: _.teaserBild[1].url,
+                poster: _.teaserBild
+                  ? _.teaserBild[Object.keys(_.teaserBild)[0]]?.url
+                  : undefined,
               },
             };
           });
@@ -132,34 +166,28 @@ export const mapCdnDocResp = (data: any) => {
   const { document, cluster } = data;
   const { id } = document;
 
+  // Used to filter out recomendations from related items
+  const docStructureNodePath = document.structureNodePath;
+
   const name = document.titel;
   const type = resolveContentType(document.contentType);
   const description = document.beschreibung;
 
-  const sources: Source[] = ((document.formitaeten || []) as any[])
-    .filter(
-      (_) => _.type === "h264_aac_ts_http_m3u8_http" && _.class === "main"
-    )
-    .map<Source>((_) => {
-      return {
-        type: "url",
-        url: _.url,
-        name: _.quality,
-        languages: [_.language.substring(0, 2)],
-        subtitles: (<any[]>document.captions || [])
-          .filter((_) => _.format === "webvtt")
-          .map<Subtitle>((_) => ({
-            name: `Language - ${_.language}`,
-            url: _.uri,
-            type: "vtt",
-            language: _.language.substring(0, 2),
-          })),
-      };
-    });
+  const sources: Source[] = extractSources(document);
 
   if (type === "directory") {
     throw new Error("Not playable item");
   }
+
+  const teasers = (<any[]>cluster || []).map((_) => _.teaser).flat(Infinity);
+
+  const episodes: SeriesEpisodeItem[] = teasers
+    .filter(
+      (_) =>
+        _.contentType === "episode" &&
+        _.structureNodePath === docStructureNodePath
+    )
+    .map(extractEpisode);
 
   const item: PlayableItem = {
     type,
@@ -167,19 +195,20 @@ export const mapCdnDocResp = (data: any) => {
     name,
     description,
     images: { poster: document.teaserBild["1"].url },
-    // sources
-  };
-
-  const episode: SeriesEpisodeItem = {
-    name,
-    season: document.seasonNumber || 1,
-    episode: document.episodeNumber || 1,
-    ids: { id },
-    sources,
+    videos: teasers
+      .filter((_) => _.contentType === "clip")
+      .map((_) => {
+        return {
+          name: _.titel,
+          id: _.id,
+          type: "url",
+          url: `zdf-mediathek:${_.id}`,
+        };
+      }),
   };
 
   if (item.type === "series") {
-    Object.assign(item, { episodes: [episode] });
+    Object.assign(item, { episodes });
   } else {
     Object.assign(item, { sources });
   }
