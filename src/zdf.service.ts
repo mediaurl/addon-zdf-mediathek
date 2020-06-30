@@ -1,5 +1,5 @@
 import * as url from "url";
-import { getToken } from "./token";
+import { getToken, refreshToken } from "./token";
 import fetch, { Response } from "node-fetch";
 import {
   ItemTypes,
@@ -12,21 +12,29 @@ import {
 } from "@watchedcom/sdk";
 import { zdfMediathekAddon } from ".";
 
-const throwIfNotOk = async (resp: Response) => {
-  const errorText = `${resp.statusText} (HTTP ${resp.status}) on ${resp.url}`;
+const throwIfNotOk = (sideEffectFn?: (resp: Response) => void) => {
+  const fn = async (resp: Response) => {
+    const errorText = `${resp.statusText} (HTTP ${resp.status}) on ${resp.url}`;
 
-  if (!resp.ok) {
-    throw new Error(errorText);
-  }
+    if (!resp.ok) {
+      if (sideEffectFn) {
+        sideEffectFn(resp);
+      }
 
-  return resp;
+      throw new Error(errorText);
+    }
+
+    return resp;
+  };
+
+  return fn;
 };
 
 export const makeApiQuery = async <T = any>(path: string): Promise<T> => {
   return fetch(url.resolve("https://api.zdf.de/", path), {
     headers: { "Api-Auth": `Bearer ${await getToken()}` },
   })
-    .then(throwIfNotOk)
+    .then(throwIfNotOk((resp) => refreshToken()))
     .then((resp) => resp.json());
 };
 
@@ -34,7 +42,7 @@ export const makeCdnQuery = async <T = any>(path: string): Promise<T> => {
   return fetch(
     url.resolve("https://zdf-cdn.live.cellular.de/mediathekV2/", path)
   )
-    .then(throwIfNotOk)
+    .then(throwIfNotOk())
     .then((resp) => resp.json());
 };
 
