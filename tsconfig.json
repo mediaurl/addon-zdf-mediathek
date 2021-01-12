@@ -3,7 +3,8 @@
     "target": "es5",
     "lib": ["ES2019"],
     "strictNullChecks": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "esModuleInterop": true
   },
   "include": [
     "src/index.ts"

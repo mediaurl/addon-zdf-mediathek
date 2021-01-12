@@ -1,6 +1,6 @@
-# watchedAddonZdfMediathek addon for [WATCHED.com](https://www.watched.com)
+# ZDF Mediathek addon for [MediaURL](https://www.mediaurl.io/)
 
-This addon was created with the [WATCHED javascript SDK](https://github.com/watchedcom/sdk-javascript).
+This addon was created with the [MediaURL Javascript SDK](https://github.com/mediaurl/mediaurl-js).
 
 ## Start the development addon server
 

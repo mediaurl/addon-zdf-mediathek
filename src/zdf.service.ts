@@ -9,7 +9,7 @@ import {
   PlayableItem,
   SeriesEpisodeItem,
   Subtitle,
-} from "@watchedcom/sdk";
+} from "@mediaurl/sdk";
 import { zdfMediathekAddon } from ".";
 
 const throwIfNotOk = (sideEffectFn?: (resp: Response) => void) => {

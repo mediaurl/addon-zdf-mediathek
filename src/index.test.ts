@@ -1,4 +1,4 @@
-import { testAddon } from "@watchedcom/test";
+import { testAddon } from "@mediaurl/test-utils";
 import { zdfMediathekAddon } from "./index";
 
 import { autotest } from "./lib";

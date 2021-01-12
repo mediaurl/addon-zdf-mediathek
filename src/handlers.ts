@@ -1,4 +1,4 @@
-import { WorkerHandlers, ResolvedUrl } from "@watchedcom/sdk";
+import { WorkerHandlers, ResolvedUrl } from "@mediaurl/sdk";
 import * as url from "url";
 import {
   makeApiQuery,
@@ -14,7 +14,7 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   input,
   ctx
 ) => {
-  console.log("directory", input);
+  // console.log("directory", input);
 
   //const t = await i18n.cloneInstance().changeLanguage(input.language);
 
@@ -52,7 +52,7 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
 };
 
 export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
-  console.log("item", input);
+  // console.log("item", input);
 
   await ctx.requestCache(input.ids.id);
 
