@@ -84,5 +84,9 @@ export const sourceHandler: ActionHandlers["source"] = async (input, ctx) => {
     ({ document }) => extractSources(document)
   );
 
+  if (!result || !result.length) {
+    throw new Error("No sources available (geo-restricted video)");
+  }
+
   return result;
 };
