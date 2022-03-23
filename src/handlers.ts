@@ -1,4 +1,4 @@
-import { WorkerHandlers, ResolvedUrl } from "@mediaurl/sdk";
+import { ActionHandlers, ResolvedUrl } from "@mediaurl/sdk";
 import * as url from "url";
 import {
   makeApiQuery,
@@ -10,7 +10,7 @@ import {
   extractSources,
 } from "./zdf.service";
 
-export const directoryHandler: WorkerHandlers["directory"] = async (
+export const directoryHandler: ActionHandlers["catalog"] = async (
   input,
   ctx
 ) => {
@@ -51,7 +51,7 @@ export const directoryHandler: WorkerHandlers["directory"] = async (
   // throw new Error(`No handler for category: ${rootId} / ${input.id}`);
 };
 
-export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
+export const itemHandler: ActionHandlers["item"] = async (input, ctx) => {
   // console.log("item", input);
 
   await ctx.requestCache(input.ids.id);
@@ -59,7 +59,7 @@ export const itemHandler: WorkerHandlers["item"] = async (input, ctx) => {
   return makeCdnQuery(`document/${input.ids.id}`).then(mapCdnDocResp);
 };
 
-export const resolveHandler: WorkerHandlers["resolve"] = async (input, ctx) => {
+export const resolveHandler: ActionHandlers["resolve"] = async (input, ctx) => {
   const id = url.parse(input.url).hostname;
 
   if (!id) throw new Error(`Unable to extract id from ${input.url}`);
@@ -71,7 +71,7 @@ export const resolveHandler: WorkerHandlers["resolve"] = async (input, ctx) => {
   });
 };
 
-export const sourceHandler: WorkerHandlers["source"] = async (input, ctx) => {
+export const sourceHandler: ActionHandlers["source"] = async (input, ctx) => {
   const {
     ids: { id },
     episode,
@@ -80,9 +80,9 @@ export const sourceHandler: WorkerHandlers["source"] = async (input, ctx) => {
 
   const targetId = episodeId ?? id;
 
-  const result = await makeCdnQuery(
-    `document/${targetId}`
-  ).then(({ document }) => extractSources(document));
+  const result = await makeCdnQuery(`document/${targetId}`).then(
+    ({ document }) => extractSources(document)
+  );
 
   return result;
 };

@@ -1,4 +1,4 @@
-import { createWorkerAddon, runCli } from "@mediaurl/sdk";
+import { createAddon, runCli } from "@mediaurl/sdk";
 import {
   directoryHandler,
   itemHandler,
@@ -6,13 +6,13 @@ import {
   resolveHandler,
 } from "./handlers";
 
-export const zdfMediathekAddon = createWorkerAddon({
+export const zdfMediathekAddon = createAddon({
   id: "zdf-mediathek",
   name: "ZDF Mediathek",
   version: "0.0.3",
   icon: "https://www.zdf.de/static/img/appicons/favicon-144.png",
   itemTypes: ["movie", "series", "directory"],
-  actions: ["directory", "item", "resolve"],
+  actions: ["catalog", "item", "resolve"],
   defaultDirectoryFeatures: {
     search: { enabled: true },
   },
@@ -49,7 +49,7 @@ export const zdfMediathekAddon = createWorkerAddon({
   ],
 });
 
-zdfMediathekAddon.registerActionHandler("directory", directoryHandler);
+zdfMediathekAddon.registerActionHandler("catalog", directoryHandler);
 
 zdfMediathekAddon.registerActionHandler("item", itemHandler);
 
