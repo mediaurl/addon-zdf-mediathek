@@ -33,11 +33,15 @@ export const zdfMediathekAddon = createAddon({
       name: "ZDF Mediathek",
       config: { showOnHomescreen: true },
     },
-    {
-      id: "meist-gesehen-100",
-      name: "ZDF: Meist gesehen",
-      config: { showOnHomescreen: true },
-    },
+    /**
+     * HTTP 410
+     * https://zdf-cdn.live.cellular.de/mediathekV2/document/meist-gesehen-100
+     */
+    // {
+    //   id: "meist-gesehen-100",
+    //   name: "ZDF: Meist gesehen",
+    //   config: { showOnHomescreen: true },
+    // },
     {
       id: "categories",
       name: "ZDF: Kategorien",
